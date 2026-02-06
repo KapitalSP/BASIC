@@ -1,15 +1,17 @@
+#!/usr/bin/env python3
 import os
 import multiprocessing
 import platform
 import subprocess
+import sys
 
 class Basic:
     """
-    BASIC v1.0: The Universal Socket.
+    BASIC v1.2: The Universal Socket.
     Powered by Native Subprocess Bridge. No Dependencies.
     """
     def __init__(self):
-        self.version = "1.0.0"
+        self.version = "1.2.0"
         self.root = os.path.dirname(os.path.abspath(__file__))
         # Core slots for the infrastructure
         self.slots = ["models", "drivers", "refinery", "logs", "plugins"]
@@ -41,19 +43,18 @@ class Basic:
     def mount_components(self):
         # Scan for Engine Files (.gguf)
         model_dir = os.path.join(self.root, "models")
-        # Filter for .gguf files only
-        engines = [
+        # Sort files alphabetically for consistent loading
+        engines = sorted([
             f for f in os.listdir(model_dir) 
             if f.endswith(".gguf") and os.path.isfile(os.path.join(model_dir, f))
-        ]
+        ])
         
         # Scan for Driver Files (Executables)
         driver_dir = os.path.join(self.root, "drivers")
-        # Ignore hidden files (starting with .)
-        drivers = [
+        drivers = sorted([
             f for f in os.listdir(driver_dir) 
             if not f.startswith(".") and os.path.isfile(os.path.join(driver_dir, f))
-        ]
+        ])
 
         # Critical Check: Engine is mandatory
         if not engines:
@@ -67,6 +68,15 @@ class Basic:
             self.active_driver = None
         else:
             self.active_driver = os.path.join(driver_dir, drivers[0])
+            
+            # [Auto-Patch] Grant execution permissions for Linux/macOS
+            if platform.system() != "Windows":
+                try:
+                    os.chmod(self.active_driver, 0o755)
+                    print(f"[SEC] Permission Granted: +x to {drivers[0]}")
+                except Exception as e:
+                    print(f"[WARN] Failed to set permissions: {e}")
+
             print(f"[SOCKET] Driver Mounted: {drivers[0]}")
 
         self.active_engine = os.path.join(model_dir, engines[0])
@@ -93,19 +103,22 @@ class Basic:
             except KeyboardInterrupt:
                 print("\n[System] Interrupted.")
                 break
+            except EOFError: # Handle Ctrl+D gracefully
+                break
 
     def run_subprocess(self, prompt):
         print("[AI] ", end="", flush=True)
         
-        # Construct the command for the driver (Standard llama.cpp syntax)
+        # Construct the command for the driver
         command = [
             self.active_driver,
             "-m", self.active_engine,
             "-p", prompt,
-            "-n", "256",       # Token limit
+            "-n", "512",       # Token limit
             "--log-disable"    # Suppress system logs
         ]
 
+        process = None
         try:
             # Execute the driver using native subprocess
             process = subprocess.Popen(
@@ -119,7 +132,7 @@ class Basic:
             
             # Stream the output in real-time
             for line in process.stdout:
-                print(line, end="")
+                print(line, end="", flush=True)
             
             # Check for errors after execution
             _, stderr = process.communicate()
@@ -129,6 +142,13 @@ class Basic:
         except Exception as e:
             print(f"\n[ERROR] Bridge Failure: {e}")
             print(">> Check if the driver is compatible with your OS.")
+            
+        finally:
+            # [Safety] Kill zombie processes if the loop breaks
+            if process and process.poll() is None:
+                process.terminate()
+                process.wait()
 
 if __name__ == "__main__":
     Basic().initialize()
+
