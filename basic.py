@@ -1,38 +1,95 @@
 import os
 import sys
+import platform
+import urllib.request
+import zipfile
+import shutil
+import stat
 
 # ==============================================================================
-# 🏭 BASIC PLATFORM FACTORY (One-Click Installer)
-# This script generates the entire ecosystem: Engine, Data, Config, and Folders.
+# 🏭 BASIC v9.1 (Full Multilingual Edition)
+# The complete ecosystem with 10-language support and Omni-Selector logic.
+# Optimized for GitHub deployment and global accessibility.
 # ==============================================================================
 
-def build_platform():
+def ask_and_download(base_dir):
+    drivers_dir = os.path.join(base_dir, "drivers")
+    os.makedirs(drivers_dir, exist_ok=True)
+    
+    URL_BASE = "https://github.com/ggerganov/llama.cpp/releases/download/b4604/"
+    
+    options = {
+        "1": {"name": "Windows (PC)",      "file": "llama-cli.exe",     "save": "llama-cli.exe",     "url": URL_BASE + "llama-b4604-bin-win-avx-x64.zip"},
+        "2": {"name": "Android (Termux)",  "file": "llama-cli",         "save": "llama-cli-android", "url": URL_BASE + "llama-b4604-bin-android-arm64-v8a.zip"},
+        "3": {"name": "Mac (Apple Silicon)","file": "llama-cli",        "save": "llama-cli-mac",     "url": URL_BASE + "llama-b4604-bin-macos-arm64.zip"},
+        "4": {"name": "Linux (Server)",    "file": "llama-cli",         "save": "llama-cli-linux",   "url": URL_BASE + "llama-b4604-bin-linux-x64.zip"}
+    }
+
+    print("\n[❓ Setup Configuration]")
+    print("Which drivers would you like to include in this build?")
+    print("-" * 55)
+    print(" 1. Windows Only (Optimized for this PC)")
+    print(" 2. Android Only (Optimized for Mobile/Termux)")
+    print(" 3. Hybrid (Windows + Android - Recommended for Migration)")
+    print(" 4. Universal (All Platforms - Win/Mac/Linux/Android)")
+    print("-" * 55)
+    
+    choice = input("Select Option (1-4) > ").strip()
+    
+    to_download = []
+    if choice == "1": to_download = ["1"]
+    elif choice == "2": to_download = ["2"]
+    elif choice == "3": to_download = ["1", "2"]
+    elif choice == "4": to_download = ["1", "2", "3", "4"]
+    else: return
+
+    print(f"\n[⬇️ Downloading {len(to_download)} components...]")
+    for key in to_download:
+        item = options[key]
+        final_path = os.path.join(drivers_dir, item['save'])
+        if os.path.exists(final_path): continue
+        
+        print(f"   Fetching: {item['name']}...")
+        zip_path = os.path.join(drivers_dir, "temp.zip")
+        try:
+            urllib.request.urlretrieve(item['url'], zip_path)
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                with zip_ref.open(item['file']) as source, open(final_path, "wb") as target:
+                    shutil.copyfileobj(source, target)
+            if "exe" not in item['save']:
+                os.chmod(final_path, os.stat(final_path).st_mode | stat.S_IEXEC)
+            print(f"   ✅ Installed: {item['save']}")
+        except Exception as e: print(f"   ❌ Failed: {e}")
+        finally:
+            if os.path.exists(zip_path): os.remove(zip_path)
+
+def build_basic():
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    print(f"\n[🏗️ Factory] Initializing Construction in: {base_dir}")
+    print(f"\n[🏗️ BASIC v9.1] Initiating Global Build...")
 
     # ------------------------------------------------------------------
-    # 1. THE TITANIUM ENGINE (BASIC v3.0) - Embedded Source Code
+    # 1. THE FULL MULTILINGUAL ENGINE (basic.py)
     # ------------------------------------------------------------------
     code_basic = r'''#!/usr/bin/env python3
 import os, sys, json, platform, subprocess, urllib.request
 
-# [1. Environment Hardening] Force UTF-8 for Windows/Linux (Prevent Mojibake)
+# [1. Encoding Shield]
 sys.stdout.reconfigure(encoding='utf-8')
 if platform.system() == 'Windows': os.system('chcp 65001 >nul')
 
 class Basic:
-    # [2. Language Data] Covering 90% of Global Population (Top 10)
+    # [2. Full 10-Language Array]
     LOCALE = {
         'en': ('[System] Connecting...', 'Answer in English.'),
-        'ko': ('[시스템] 접속 중...', '반드시 한국어로 답변하세요.'),
+        'ko': ('[시스템] 연결 중...', '반드시 한국어로 답변하세요.'),
         'ja': ('[システム] 接続中...', '日本語で答えてください。'),
         'zh': ('[系统] 连接中...', '请用中文回答。'),
-        'ru': ('[Система] Подключение...', 'Отвечайте на русском.'),
-        'hi': ('[System] Connecting...', 'हिंदी में उत्तर दें।'),
-        'es': ('[System] Conectando...', 'Responde en español.'),
-        'fr': ('[System] Connexion...', 'Répondez en français.'),
-        'ar': ('[System] Connecting...', 'أجب باللغة العربية.'),
-        'pt': ('[System] Conectando...', 'Responda em português.')
+        'ru': ('[Система] ...', 'Отвечайте на русском.'),
+        'hi': ('[System] ...', 'हिंदी में उत्तर दें。'),
+        'es': ('[System] ...', 'Responde en español.'),
+        'fr': ('[System] ...', 'Répondez en français.'),
+        'ar': ('[System] ...', 'أجب باللغة العربية.'),
+        'pt': ('[System] ...', 'Responda em português.')
     }
 
     def __init__(self):
@@ -41,7 +98,7 @@ class Basic:
         self.market_url = "https://raw.githubusercontent.com/KapitalSP/BASIC/main/market.json"
 
     def detect_lang(self, text):
-        """Detect input language in 0.001s using Unicode ranges"""
+        """Advanced detection for 10 major global scripts"""
         for char in text:
             if '\uac00' <= char <= '\ud7a3': self.lang = 'ko'; return
             if '\u3040' <= char <= '\u30ff': self.lang = 'ja'; return
@@ -49,156 +106,86 @@ class Basic:
             if '\u0400' <= char <= '\u04ff': self.lang = 'ru'; return
             if '\u0900' <= char <= '\u097f': self.lang = 'hi'; return
             if '\u0600' <= char <= '\u06ff': self.lang = 'ar'; return
-        self.lang = 'en'
+        self.lang = 'en' # Default for Latin-based (EN, ES, FR, PT)
 
     def run(self):
-        # [3. Create Physical Slots]
-        for folder in ['models', 'drivers', 'plugins']:
-            os.makedirs(os.path.join(self.root, folder), exist_ok=True)
-
-        # [4. Scan Components]
-        m_dir = os.path.join(self.root, 'models')
-        d_dir = os.path.join(self.root, 'drivers')
+        for f in ['models', 'drivers', 'plugins']: os.makedirs(os.path.join(self.root, f), exist_ok=True)
+        m_dir, d_dir = os.path.join(self.root, 'models'), os.path.join(self.root, 'drivers')
         
-        engines = [f for f in os.listdir(m_dir) if f.endswith('.gguf')]
-        drivers = [f for f in os.listdir(d_dir) if os.path.isfile(os.path.join(d_dir, f))]
+        # [Smart Driver Selector]
+        sys_name = platform.system().lower()
+        t_name = ""
+        if 'windows' in sys_name: t_name = ".exe"
+        elif 'darwin' in sys_name: t_name = "-mac"
+        elif 'linux' in sys_name:
+            env_p = os.environ.get('PREFIX','').lower()
+            t_name = "-android" if ('termux' in env_p or 'android' in env_p) else "-linux"
 
-        print(f"--- BASIC AI Platform (v3.0 Titanium) ---")
-        if not engines: print("[!] No model found in /models. Please add a .gguf file."); return
-        
-        driver_path = os.path.join(d_dir, drivers[0]) if drivers else None
-        if driver_path and platform.system() != 'Windows':
-            try: os.chmod(driver_path, 0o755)
+        d_path = next((os.path.join(d_dir, f) for f in os.listdir(d_dir) if t_name in f.lower()), None)
+        if not d_path and 'windows' not in sys_name:
+             d_path = next((os.path.join(d_dir, f) for f in os.listdir(d_dir) if '.' not in f), None)
+
+        if d_path and 'windows' not in sys_name: 
+            try: os.chmod(d_path, 0o755)
             except: pass
 
-        # [5. Main Loop]
-        print("Type '/market', '/exit', or start chatting.\n")
+        engines = [f for f in os.listdir(m_dir) if f.endswith('.gguf')]
+        print(f"\n--- BASIC AI (v9.1 Omni-Global) ---")
+        if not engines: 
+            print("[!] No model found. Place a .gguf file in /models.")
+            return
+
+        print(f"[Status] Active Driver: {os.path.basename(d_path) if d_path else 'SIMULATION'}")
         
         while True:
             try:
-                user_input = input("\n[USER] > ").strip()
-                if not user_input: continue
-                if user_input.lower() in ['/exit', 'exit']: break
+                u_input = input("\n[USER] > ").strip()
+                if not u_input or u_input.lower() == '/exit': break
                 
-                self.detect_lang(user_input) # Auto-detect language
-                msg, prompt = self.LOCALE.get(self.lang, self.LOCALE['en'])
-
-                # [Feature 1] Access Market
-                if user_input == '/market':
-                    print(msg)
+                self.detect_lang(u_input)
+                sys_msg, prompt_steer = self.LOCALE.get(self.lang, self.LOCALE['en'])
+                
+                if u_input == '/market':
                     try:
-                        with urllib.request.urlopen(self.market_url, timeout=3) as res:
-                            data = json.loads(res.read().decode())
-                            print(f"=== Market Items ({len(data.get('items', []))}) ===")
-                            for item in data.get('items', []):
-                                print(f"- {item['name']} : {item['desc']}")
-                    except: print("[!] Offline Mode (Cannot reach server)")
+                        with urllib.request.urlopen(self.market_url, timeout=3) as r:
+                            items = json.loads(r.read().decode()).get('items',[])
+                            for i in items: print(f"- {i['name']}: {i['desc']}")
+                    except: print("[!] Connection Error.")
                     continue
-
-                # [Feature 2] Run AI (The Strongest Link)
-                print("[AI] ", end="", flush=True)
-                if not driver_path: print("(Simulation Mode: No driver found)"); continue
                 
-                full_prompt = f"System: {prompt}\nUser: {user_input}\nAssistant:"
-                process = None
-                try:
-                    process = subprocess.Popen(
-                        [driver_path, "-m", os.path.join(m_dir, engines[0]), "-p", full_prompt, "-n", "512", "--log-disable"],
-                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        encoding='utf-8', errors='replace'
-                    )
-                    for line in process.stdout: print(line, end="", flush=True)
-                    process.wait()
+                print("[AI] ", end="", flush=True)
+                if not d_path: print("(Simulation Mode)"); continue
+                
+                cmd = [d_path, "-m", os.path.join(m_dir, engines[0]), "-p", f"System: {prompt_steer}\nUser: {u_input}\nAssistant:", "-n", "512", "--log-disable"]
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8', errors='replace')
+                for line in p.stdout: print(line, end="", flush=True)
+                p.wait()
 
-                except KeyboardInterrupt: print("\n[!] Stopped by User")
-                finally:
-                    if process and process.poll() is None: process.terminate(); process.wait()
-
-            except EOFError: break
-            except Exception as e: print(f"\n[Error] {e}")
+            except KeyboardInterrupt: break
+            finally:
+                if 'p' in locals() and p and p.poll() is None: p.terminate()
 
 if __name__ == "__main__":
     Basic().run()
 '''
 
     # ------------------------------------------------------------------
-    # 2. MARKET DATA (Fallback)
+    # 2. FILE GENERATION
     # ------------------------------------------------------------------
-    code_market = r'''{
-  "version": "1.0",
-  "items": [
-    {
-      "id": "sys_diag",
-      "name": "System Diagnostics",
-      "desc": "Basic tool to check environment",
-      "size": "2KB"
-    }
-  ]
-}'''
+    for folder in ["drivers", "models", "plugins"]:
+        os.makedirs(os.path.join(base_dir, folder), exist_ok=True)
 
-    # ------------------------------------------------------------------
-    # 3. README (Documentation)
-    # ------------------------------------------------------------------
-    code_readme = r'''# BASIC: The Local AI Platform 🏟️
+    with open(os.path.join(base_dir, "basic.py"), "w", encoding="utf-8") as f:
+        f.write(code_basic.strip())
+        
+    with open(os.path.join(base_dir, "start.bat"), "w", encoding="utf-8") as f:
+        f.write("@echo off\ntitle BASIC AI\npython basic.py\npause")
 
-> **[DISCLAIMER]**
-> This tool is provided "as-is" for research purposes.
-> The user bears full responsibility for the generated content.
+    with open(os.path.join(base_dir, "README.md"), "w", encoding="utf-8") as f:
+        f.write("# BASIC v9.1 🌍\nFull Multilingual AI Socket.\n\nRun `install.py` to start.")
 
-## 🚀 Installation Guide
-1. **Engine:** Download `llama-cli` (or .exe) -> Put it in `/drivers` folder.
-2. **Brain:** Download any `.gguf` model -> Put it in `/models` folder.
-3. **Start:** Run `basic.py` (or click `run.bat`).
-
-## 🌍 Features
-* **10 Languages Support:** Auto-detects input (English, Korean, Hindi, etc.)
-* **Zero Dependencies:** No `pip install` required.
-* **Industrial Grade:** "Titanium" stability against crashes.
-'''
-
-    # ------------------------------------------------------------------
-    # 4. WINDOWS LAUNCHER (run.bat)
-    # ------------------------------------------------------------------
-    code_bat = r'''@echo off
-chcp 65001 >nul
-title BASIC AI Platform
-echo Starting BASIC...
-python basic.py
-pause
-'''
-
-    # ==================================================================
-    # 🏗️ BUILD PROCESS
-    # ==================================================================
-    
-    # 1. Create Directories
-    folders = ["drivers", "models", "plugins"]
-    for folder in folders:
-        path = os.path.join(base_dir, folder)
-        if not os.path.exists(path):
-            os.makedirs(path)
-            print(f"   [+] Folder Created: /{folder}")
-        else:
-            print(f"   [.] Folder Exists:  /{folder}")
-
-    # 2. Write Files
-    files_map = {
-        "basic.py": code_basic,
-        "market.json": code_market,
-        "README.md": code_readme,
-        "run.bat": code_bat
-    }
-
-    for filename, content in files_map.items():
-        file_path = os.path.join(base_dir, filename)
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content.strip())
-        print(f"   [+] File Generated: {filename}")
-
-    print("\n✅ [SUCCESS] Factory build complete!")
-    print("   -> 1. Put 'llama-cli' in /drivers")
-    print("   -> 2. Put '.gguf' model in /models")
-    print("   -> 3. Run 'basic.py'\n")
+    ask_and_download(base_dir)
+    print("\n✅ [Build Complete] BASIC v9.1 is ready for global use.")
 
 if __name__ == "__main__":
-    build_platform()
+    build_basic()
