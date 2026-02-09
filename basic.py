@@ -1,114 +1,91 @@
-import os, sys, subprocess, platform, json
+import os, sys, subprocess, platform, threading, queue, time
 
 # ==============================================================================
-# 💎 BASIC ENGINE v10.2 (Tera-Scale + Market)
-# Optimized for 1,000B+ Distributed Inference with Marketplace Integration
+# ⚡ BASIC v3.0 [OVERCLOCK]
+# Zero Dependency | Multi-Threaded | Flash Attention | H/W Accelerated
 # ==============================================================================
 
-class BasicCore:
+# [System Spec Auto-Detection]
+CORES = os.cpu_count() or 4
+IS_MOBILE = 'termux' in str(os.environ) or 'android' in str(os.environ)
+
+# [Performance Flags]
+# -t: CPU 쓰레드 풀가동
+# -ngl: GPU 가속 최대치
+# -fa: 플래시 어텐션 (속도 향상)
+# --no-mmap: 램에 강제 로딩 (로딩 느림, 실행 빠름)
+FLAGS = ["-t", str(CORES), "-ngl", "999", "-fa", "-c", "4096", "-b", "512", "--log-disable"]
+
+class Engine:
     def __init__(self):
         self.root = os.path.dirname(os.path.abspath(__file__))
-        self.driver_dir = os.path.join(self.root, 'drivers')
-        self.model_dir = os.path.join(self.root, 'models')
-        self.plugin_dir = os.path.join(self.root, 'plugins')
-        self.market_file = os.path.join(self.root, 'market.json')
+        self.driver = self._get_driver()
+        self.model = self._get_model()
+        self.q = queue.Queue()
+        self.proc = None
 
-    def load_plugins(self):
-        # [Extension Slot]
-        if not os.path.exists(self.plugin_dir): return
-        plugins = [f for f in os.listdir(self.plugin_dir) if f.endswith('.py')]
-        if not plugins: return
-
-        print(f"[BASIC] Found {len(plugins)} plugins. Engaging...")
-        for plugin in plugins:
-            try:
-                path = os.path.join(self.plugin_dir, plugin)
-                with open(path, 'r', encoding='utf-8') as f:
-                    exec(f.read(), globals())
-                print(f"   + Loaded: {plugin}")
-            except Exception as e:
-                print(f"   ! Failed: {plugin} ({e})")
-        print("")
-
-    def show_market(self):
-        # [Marketplace Viewer]
-        if not os.path.exists(self.market_file):
-            print("[BASIC] Market registry not found. Run install.py first.")
-            return
-
-        try:
-            with open(self.market_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            print(f"\n--- 🛒 BASIC Market v{data.get('version', '1.0')} ---")
-            print(f"MOTD: {data.get('motd', 'No message')}")
-            print("-" * 40)
-            print(f"{'TYPE':<10} | {'NAME':<20} | {'DESC'}")
-            print("-" * 40)
-            for item in data.get('items', []):
-                print(f"{item.get('type','Item'):<10} | {item.get('name','Unknown'):<20} | {item.get('desc','')}")
-            print("-" * 40 + "\n")
-        except Exception as e:
-            print(f"[BASIC] Market Error: {e}")
-
-    def ignite(self):
-        # 0. Load Plugins
-        self.load_plugins()
-
-        # 1. Blind Bind
+    def _get_driver(self):
+        if IS_MOBILE: return "llama-cli"
         sys_os = platform.system()
-        bin_name = "llama-cli.exe" if sys_os == 'Windows' else "llama-cli"
-        if sys_os != 'Windows':
-            if 'darwin' in sys_os.lower(): bin_name = "llama-cli-mac"
-            else: bin_name = "llama-cli-linux"
+        b = "llama-cli.exe" if sys_os=='Windows' else "llama-cli-mac" if sys_os=='Darwin' else "llama-cli-linux"
+        return os.path.join(self.root, 'drivers', b)
 
-        driver_path = os.path.join(self.driver_dir, bin_name)
+    def _get_model(self):
+        mdir = os.path.join(os.environ.get('HOME','.'), 'models') if IS_MOBILE else os.path.join(self.root, 'models')
+        try: return os.path.join(mdir, [f for f in os.listdir(mdir) if f.endswith('.gguf')][0])
+        except: return None
+
+    def _reader(self, stream):
+        """백그라운드 스레드: 출력을 실시간으로 낚아채서 큐에 넣음"""
+        for line in iter(stream.readline, ''):
+            self.q.put(line)
+        stream.close()
+
+    def generate(self, prompt):
+        if not self.model: return print(" [!] Error: No model file found.")
         
-        # 2. Auto-Select Model
-        try:
-            model_file = [f for f in os.listdir(self.model_dir) if f.endswith('.gguf')][0]
-            model_path = os.path.join(self.model_dir, model_file)
-        except (IndexError, FileNotFoundError):
-            print("[BASIC] Error: No GGUF model found in /models", file=sys.stderr)
-            return
+        cmd = [self.driver, "-m", self.model, "-p", f"User: {prompt}\nAssistant:"] + FLAGS
+        
+        # 프로세스 생성 (비동기)
+        self.proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding='utf-8', errors='replace', bufsize=1
+        )
 
-        print(f"[BASIC] Tera-Link Established: {model_file}")
-        print(f"        (Mode: Distributed / Zero-Latency Pipe)\n")
-        print("        (Type '/market' to browse extensions)\n")
+        # 별도 스레드가 출력을 감시함 (메인 스레드 안 멈춤)
+        t = threading.Thread(target=self._reader, args=(self.proc.stdout,))
+        t.daemon = True # 메인 프로그램 죽으면 같이 죽음
+        t.start()
 
-        # 3. Main Protocol Loop
-        while True:
+        print(" VOID: ", end="", flush=True)
+
+        # 메인 루프: 큐에서 데이터를 꺼내서 출력
+        while self.proc.poll() is None or not self.q.empty():
             try:
-                prompt = input().strip()
-                if not prompt: continue
-                
-                # [Command Hook]
-                if prompt == '/exit': break
-                if prompt == '/market': 
-                    self.show_market()
-                    continue # Do not send to AI
+                line = self.q.get(timeout=0.01) # 0.01초 대기 (CPU 과부하 방지)
+                print(line, end="", flush=True)
+            except queue.Empty:
+                continue
+        print("\n")
 
-                # [Tera-Scale Optimization]
-                cmd = [
-                    driver_path, 
-                    "-m", model_path, 
-                    "-p", f"User: {prompt}\nAI:", 
-                    "-n", "512", 
-                    "--log-disable",
-                    "-ngl", "999", "-sm", "row"
-                ]
-                
-                if sys_os == 'Linux': cmd.extend(["--numa", "dist"])
+def main():
+    if IS_MOBILE: os.system("clear")
+    else: os.system("cls" if os.name=='nt' else "clear")
 
-                p_args = {"bufsize": 0}
-                if sys_os != 'Windows': p_args["pass_fds"] = (sys.stdout.fileno(),)
+    print(f" [SYSTEM] Cores: {CORES} | GPU Layers: Max | Flash Attn: ON")
+    print(f" [BASIC] Multi-Threaded Engine Ready.\n")
 
-                p = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr, **p_args)
-                p.wait()
-                print("") 
-
-            except KeyboardInterrupt: break
-            except EOFError: break
+    engine = Engine()
+    
+    while True:
+        try:
+            p = input(" You: ").strip()
+            if not p: continue
+            if p.lower() in ['exit', 'quit']: break
+            engine.generate(p)
+        except KeyboardInterrupt:
+            print("\n [!] Interrupted.")
+            break
 
 if __name__ == "__main__":
-    BasicCore().ignite()
+    main()
