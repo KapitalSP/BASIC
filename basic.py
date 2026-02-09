@@ -1,91 +1,136 @@
 import os, sys, subprocess, platform, threading, queue, time
 
 # ==============================================================================
-# ⚡ BASIC v3.0 [OVERCLOCK]
-# Zero Dependency | Multi-Threaded | Flash Attention | H/W Accelerated
+# 🎛️ BASIC v4.0 [HYPER-TUNER]
+# Feature: Auto-Tuning Dashboard (CPU/GPU Controller)
 # ==============================================================================
 
-# [System Spec Auto-Detection]
-CORES = os.cpu_count() or 4
+# [Default Config]
+CONFIG = {
+    "threads": os.cpu_count() or 4,
+    "gpu_layers": 999,      # Max Offload
+    "ctx_size": 4096,       # Context Memory
+    "flash_attn": True      # Speed Boost
+}
+
 IS_MOBILE = 'termux' in str(os.environ) or 'android' in str(os.environ)
 
-# [Performance Flags]
-# -t: CPU 쓰레드 풀가동
-# -ngl: GPU 가속 최대치
-# -fa: 플래시 어텐션 (속도 향상)
-# --no-mmap: 램에 강제 로딩 (로딩 느림, 실행 빠름)
-FLAGS = ["-t", str(CORES), "-ngl", "999", "-fa", "-c", "4096", "-b", "512", "--log-disable"]
+class Tuner:
+    def __init__(self):
+        self.clear_screen()
+        self.dashboard()
+
+    def clear_screen(self):
+        os.system("clear" if IS_MOBILE or os.name!='nt' else "cls")
+
+    def dashboard(self):
+        while True:
+            self.clear_screen()
+            print(" ┌──────────────────────────────────────────┐")
+            print(f" │ 🎛️  HYPER-TUNER // SYSTEM CONTROL       │")
+            print(" ├──────────────────────────────────────────┤")
+            print(f" │ [1] CPU Threads  : {CONFIG['threads']} (Cores)")
+            print(f" │ [2] GPU Layers   : {CONFIG['gpu_layers']} (Offload)")
+            print(f" │ [3] Context Size : {CONFIG['ctx_size']} (Tokens)")
+            print(f" │ [4] Flash Attn   : {'ON' if CONFIG['flash_attn'] else 'OFF'} (Speed)")
+            print(" ├──────────────────────────────────────────┤")
+            print(" │ [A] Auto-Optimize (Detect Hardware)      │")
+            print(" │ [S] START ENGINE (Apply & Run)           │")
+            print(" └──────────────────────────────────────────┘")
+            
+            cmd = input(" 🔧 Select > ").lower().strip()
+            
+            if cmd == 's' or cmd == '': break
+            elif cmd == 'a': self.auto_tune()
+            elif cmd == '1': self.set_val("threads")
+            elif cmd == '2': self.set_val("gpu_layers")
+            elif cmd == '3': self.set_val("ctx_size")
+            elif cmd == '4': CONFIG['flash_attn'] = not CONFIG['flash_attn']
+
+    def set_val(self, key):
+        try:
+            val = input(f" Set {key} value: ")
+            if val.isdigit(): CONFIG[key] = int(val)
+        except: pass
+
+    def auto_tune(self):
+        print(" [!] Scanning Hardware...")
+        time.sleep(0.5)
+        if IS_MOBILE:
+            # Mobile: Balance (Heat Management)
+            CONFIG['threads'] = max(2, (os.cpu_count() or 4) - 2)
+            CONFIG['ctx_size'] = 2048
+            CONFIG['flash_attn'] = False # Stability
+        else:
+            # PC: Performance (Max Power)
+            CONFIG['threads'] = os.cpu_count() or 8
+            CONFIG['ctx_size'] = 8192
+            CONFIG['flash_attn'] = True
+        print(" [!] Optimization Complete.")
+        time.sleep(0.5)
 
 class Engine:
     def __init__(self):
         self.root = os.path.dirname(os.path.abspath(__file__))
-        self.driver = self._get_driver()
-        self.model = self._get_model()
+        self.driver, self.model = self._scan()
         self.q = queue.Queue()
         self.proc = None
 
-    def _get_driver(self):
-        if IS_MOBILE: return "llama-cli"
-        sys_os = platform.system()
-        b = "llama-cli.exe" if sys_os=='Windows' else "llama-cli-mac" if sys_os=='Darwin' else "llama-cli-linux"
-        return os.path.join(self.root, 'drivers', b)
+    def _scan(self):
+        # Driver
+        if IS_MOBILE: drv = "llama-cli"
+        else:
+            sys_os = platform.system()
+            b = "llama-cli.exe" if sys_os=='Windows' else "llama-cli-mac" if sys_os=='Darwin' else "llama-cli-linux"
+            drv = os.path.join(self.root, 'drivers', b)
 
-    def _get_model(self):
+        # Model
         mdir = os.path.join(os.environ.get('HOME','.'), 'models') if IS_MOBILE else os.path.join(self.root, 'models')
-        try: return os.path.join(mdir, [f for f in os.listdir(mdir) if f.endswith('.gguf')][0])
-        except: return None
+        try: m = os.path.join(mdir, [f for f in os.listdir(mdir) if f.endswith('.gguf')][0])
+        except: m = None
+        return drv, m
 
     def _reader(self, stream):
-        """백그라운드 스레드: 출력을 실시간으로 낚아채서 큐에 넣음"""
-        for line in iter(stream.readline, ''):
-            self.q.put(line)
+        for line in iter(stream.readline, ''): self.q.put(line)
         stream.close()
 
-    def generate(self, prompt):
+    def run(self):
         if not self.model: return print(" [!] Error: No model file found.")
         
-        cmd = [self.driver, "-m", self.model, "-p", f"User: {prompt}\nAssistant:"] + FLAGS
+        # Build Command based on Tuner Config
+        flags = [
+            "-t", str(CONFIG['threads']),
+            "-ngl", str(CONFIG['gpu_layers']),
+            "-c", str(CONFIG['ctx_size']),
+            "-b", "512", "--log-disable"
+        ]
+        if CONFIG['flash_attn']: flags.append("-fa")
+
+        print(f"\n [🚀] Engine Ignition... (Threads: {CONFIG['threads']} | GPU: {CONFIG['gpu_layers']})")
         
-        # 프로세스 생성 (비동기)
-        self.proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, encoding='utf-8', errors='replace', bufsize=1
-        )
-
-        # 별도 스레드가 출력을 감시함 (메인 스레드 안 멈춤)
-        t = threading.Thread(target=self._reader, args=(self.proc.stdout,))
-        t.daemon = True # 메인 프로그램 죽으면 같이 죽음
-        t.start()
-
-        print(" VOID: ", end="", flush=True)
-
-        # 메인 루프: 큐에서 데이터를 꺼내서 출력
-        while self.proc.poll() is None or not self.q.empty():
+        while True:
             try:
-                line = self.q.get(timeout=0.01) # 0.01초 대기 (CPU 과부하 방지)
-                print(line, end="", flush=True)
-            except queue.Empty:
-                continue
-        print("\n")
+                p = input("\n You: ").strip()
+                if not p: continue
+                if p.lower() in ['exit', 'quit']: break
 
-def main():
-    if IS_MOBILE: os.system("clear")
-    else: os.system("cls" if os.name=='nt' else "clear")
+                cmd = [self.driver, "-m", self.model, "-p", f"User: {p}\nAssistant:"] + flags
+                
+                self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace', bufsize=1)
+                t = threading.Thread(target=self._reader, args=(self.proc.stdout,), daemon=True)
+                t.start()
 
-    print(f" [SYSTEM] Cores: {CORES} | GPU Layers: Max | Flash Attn: ON")
-    print(f" [BASIC] Multi-Threaded Engine Ready.\n")
-
-    engine = Engine()
-    
-    while True:
-        try:
-            p = input(" You: ").strip()
-            if not p: continue
-            if p.lower() in ['exit', 'quit']: break
-            engine.generate(p)
-        except KeyboardInterrupt:
-            print("\n [!] Interrupted.")
-            break
+                print(" AI: ", end="", flush=True)
+                while self.proc.poll() is None or not self.q.empty():
+                    try:
+                        line = self.q.get(timeout=0.01)
+                        print(line, end="", flush=True)
+                    except queue.Empty: continue
+                
+            except KeyboardInterrupt: break
 
 if __name__ == "__main__":
-    main()
+    try:
+        Tuner() # Show Dashboard First
+        Engine().run() # Start Engine
+    except KeyboardInterrupt: pass
