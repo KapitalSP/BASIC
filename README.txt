@@ -77,5 +77,6 @@ Zero Liability: The architect is not responsible for what you build, destroy, or
 
 The Code: Do not cross the line. With great power comes the absolute responsibility to wield it wisely.
 
-BASIC v2.2 // Architected by KapitalSP & Gemini.
+BASIC v2.2 // Architected by KapitalSP
+
 
