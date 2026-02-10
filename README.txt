@@ -1,3 +1,9 @@
+## 📜 License
+
+Distributed under the **MIT License**. See `LICENSE` for more information.
+
+> **"Free to use, Free to modify. Just keep the credit."**
+
 BASIC: The Tera-Scale Sovereign
 "Stop Renting Intelligence. Own It."
 
@@ -72,3 +78,4 @@ Zero Liability: The architect is not responsible for what you build, destroy, or
 The Code: Do not cross the line. With great power comes the absolute responsibility to wield it wisely.
 
 BASIC v2.2 // Architected by KapitalSP & Gemini.
+
