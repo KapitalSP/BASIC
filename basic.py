@@ -1,226 +1,127 @@
+# Copyright 2026 KapitalSP
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# http://www.apache.org/licenses/LICENSE-2.0
+
 import os, sys, platform, json, subprocess, time, urllib.request, zipfile, shutil, stat
 
 # ==============================================================================
-# 🏭 BASIC CHASSIS v2.3 [READABLE FACTORY]
+# 🛡️ KAPITAL SENTINEL [UNIVERSAL CORE MANAGER]
 # ==============================================================================
+try: 
+    import psutil
+    HAS_DEPS = True
+except ImportError: 
+    HAS_DEPS = False
 
+class KapitalSentinel:
+    def __init__(self, role="worker"):
+        self.os = platform.system()
+        self.ignite(role)
+
+    def ignite(self, role):
+        if not HAS_DEPS: return
+        try:
+            p = psutil.Process(os.getpid())
+            # 1. Priority Boost
+            if self.os == "Windows": p.nice(psutil.HIGH_PRIORITY_CLASS)
+            else: 
+                try: p.nice(-10)
+                except: pass
+            
+            # 2. Smart Core Affinity (OS Breathing Room)
+            cores = psutil.cpu_count(logical=True)
+            if role == "worker" and cores:
+                reserve = 1 if cores > 2 else 0
+                if cores > 4: reserve = 2
+                try: p.cpu_affinity(list(range(cores - reserve)))
+                except: pass
+            print(f" [🛡️] SENTINEL ACTIVE: {role.upper()} Mode")
+        except: pass
+
+# Start Sentinel immediately
+sentinel = KapitalSentinel("worker")
+
+# ==============================================================================
+# 🏭 BASIC CHASSIS v3.1 [GLOBAL]
+# ==============================================================================
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(ROOT, "config.json")
-IS_MOBILE = 'termux' in str(os.environ) or 'android' in str(os.environ)
 
-# [1] SYSTEM UTILITIES (Hidden machinery)
 class SystemUtils:
     @staticmethod
     def get_binary_name():
-        sys_os = platform.system().lower()
-        if 'windows' in sys_os: return "llama-cli.exe"
-        return "llama-cli"
-
+        return "llama-cli.exe" if platform.system() == "Windows" else "llama-cli"
+    
     @staticmethod
     def get_driver_path():
         return os.path.join(ROOT, 'drivers', SystemUtils.get_binary_name())
-
+    
     @staticmethod
     def recover_engine():
-        print("\n [SYSTEM] Engine binary missing. Initiating Auto-Recovery...")
+        print("\n [SYSTEM] Engine missing. Initiating Auto-Recovery...")
         sys_os = platform.system().lower()
         URL_BASE = "https://github.com/ggerganov/llama.cpp/releases/download/b4604/"
-        
-        if 'windows' in sys_os: target = URL_BASE + "llama-b4604-bin-win-avx-x64.zip"
-        elif 'darwin' in sys_os: target = URL_BASE + "llama-b4604-bin-macos-arm64.zip"
-        else: target = URL_BASE + "llama-b4604-bin-linux-x64.zip"
+        target = URL_BASE + ("llama-b4604-bin-win-avx-x64.zip" if 'win' in sys_os else "llama-b4604-bin-linux-x64.zip")
+        if 'darwin' in sys_os: target = URL_BASE + "llama-b4604-bin-macos-arm64.zip"
 
-        drivers_dir = os.path.join(ROOT, 'drivers')
-        if not os.path.exists(drivers_dir): os.makedirs(drivers_dir)
+        d_dir = os.path.join(ROOT, 'drivers')
+        os.makedirs(d_dir, exist_ok=True)
+        zip_path = os.path.join(d_dir, "temp_engine.zip")
         
-        zip_path = os.path.join(drivers_dir, "temp_engine.zip")
         try:
             import ssl
             ssl._create_default_https_context = ssl._create_unverified_context
+            print(f" [i] Fetching from: {target}")
             urllib.request.urlretrieve(target, zip_path)
             with zipfile.ZipFile(zip_path, 'r') as z:
                 for n in z.namelist():
                     if 'llama-cli' in n and not n.endswith('/'):
                         with z.open(n) as s, open(SystemUtils.get_driver_path(), "wb") as t:
                             shutil.copyfileobj(s, t)
-            if 'windows' not in sys_os:
+            
+            if 'win' not in sys_os:
                 st = os.stat(SystemUtils.get_driver_path())
                 os.chmod(SystemUtils.get_driver_path(), st.st_mode | stat.S_IEXEC)
-            print(" [SYSTEM] Recovery Complete.")
+            print(" [OK] Engine binary restored.")
             return True
-        except Exception: return False
+        except Exception as e:
+            print(f" [ERR] Recovery Failed: {e}")
+            return False
         finally:
             if os.path.exists(zip_path): os.remove(zip_path)
 
-# [2] CONFIGURATION (Settings)
-def load_config():
-    if not os.path.exists(CONFIG_PATH):
-        return {"engine": {"threads": 4, "gpu_layers": 99, "ctx_size": 4096, "flash_attn": False}}
-    try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f: return json.load(f)
-    except: return {"engine": {"threads": 4, "gpu_layers": 99, "ctx_size": 4096, "flash_attn": False}}
-
-def save_config(cfg):
-    try:
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f: json.dump(cfg, f, indent=4)
-    except: pass
-
-GLOBAL_CFG = load_config()
-ENGINE_CFG = GLOBAL_CFG.get('engine', {})
-
-# ==============================================================================
-# 🏭 BUILDER CLASS (Readable Factory Logic)
-# This section handles the self-replication process.
-# ==============================================================================
-class Builder:
-    def __init__(self):
-        # Define the output directory for the manufactured files
-        self.dist_dir = os.path.join(ROOT, "dist")
-        
-    def assemble_standalone(self):
-        """
-        Reads its own source code and writes a portable copy to the /dist folder.
-        """
-        print("\n" + "="*50)
-        print(" 🏭 BASIC FACTORY // MANUFACTURING PROCESS")
-        print("="*50)
-        
-        # Step 1: Ensure the output directory exists
-        if not os.path.exists(self.dist_dir):
-            os.makedirs(self.dist_dir)
-            print(" [1] Created distribution directory.")
-
-        # Step 2: Generate a unique filename
-        timestamp = int(time.time())
-        target_filename = f"void_chassis_{timestamp}.py"
-        target_path = os.path.join(self.dist_dir, target_filename)
-        
-        try:
-            # Step 3: Self-Reading (Quine Logic)
-            # We open this very file (__file__) to read its own DNA (Source Code)
-            print(" [2] Reading source code (Self-Scanning)...")
-            with open(__file__, 'r', encoding='utf-8') as f:
-                source_code = f.read()
-                
-            # Step 4: Add a Manufacturing Header
-            # This header identifies the file as a product of the BASIC Factory
-            header = (
-                '"""\n'
-                ' GENERATED BY BASIC FACTORY\n'
-                ' Type: Standalone Self-Repair Chassis\n'
-                ' Architecture: BASIC v2.3 (Readable)\n'
-                '"""\n'
-            )
-            
-            # Step 5: Write the new file
-            print(f" [3] Assembling new unit: {target_filename}...")
-            with open(target_path, 'w', encoding='utf-8') as f:
-                f.write(header + source_code)
-                
-            # Step 6: Verify and Report
-            size_kb = os.path.getsize(target_path) / 1024
-            print(f" [SUCCESS] Build Complete.")
-            print(f"   ├─ Location: {target_path}")
-            print(f"   └─ Size:     {size_kb:.2f} KB")
-            print("\n [NOTE] This file is fully portable and self-sufficient.")
-            
-        except Exception as e:
-            print(f" [ERROR] Manufacturing Failed: {e}")
-            
-        print("="*50)
-        input(" Press Enter to return to Dashboard...")
-
-# [4] HYPER-TUNER (Control Dashboard)
-class Tuner:
-    def __init__(self):
-        self.builder = Builder()
-        self.dashboard()
-
-    def clear(self):
-        os.system("clear" if IS_MOBILE or os.name!='nt' else "cls")
-
-    def dashboard(self):
-        while True:
-            self.clear()
-            print(" ┌──────────────────────────────────────────────────┐")
-            print(f" │ 🎛️  BASIC v2.3 // INDUSTRIAL CONTROL CENTER       │")
-            print(" ├──────────────────────────────────────────────────┤")
-            print(f" │ [1] CPU Threads   : {ENGINE_CFG.get('threads', 4)}")
-            print(f" │ [2] GPU Layers    : {ENGINE_CFG.get('gpu_layers', 0)}")
-            print(f" │ [3] Context Size  : {ENGINE_CFG.get('ctx_size', 2048)}")
-            print(" ├──────────────────────────────────────────────────┤")
-            print(" │ [A] Auto-Optimize (Hardware Scan)                │")
-            print(" │ [B] BUILD STANDALONE (Start Factory)             │")
-            print(" │ [S] START ENGINE (Ignition)                      │")
-            print(" │ [Q] Quit                                         │")
-            print(" └──────────────────────────────────────────────────┘")
-            
-            cmd = input(" 🔧 Command > ").lower().strip()
-            
-            if cmd == 's': 
-                save_config(GLOBAL_CFG)
-                try: Engine().run()
-                except KeyboardInterrupt: pass
-            elif cmd == 'q': sys.exit(0)
-            elif cmd == 'b': self.builder.assemble_standalone()
-            elif cmd == 'a': self.auto_tune()
-            elif cmd == '1': self.set_val("threads")
-            elif cmd == '2': self.set_val("gpu_layers")
-            elif cmd == '3': self.set_val("ctx_size")
-
-    def set_val(self, key):
-        try:
-            val = input(f" Set {key} value: ")
-            if val.isdigit(): ENGINE_CFG[key] = int(val)
-        except: pass
-
-    def auto_tune(self):
-        print(" [!] Scanning Hardware Topology...")
-        cpu = os.cpu_count() or 4
-        if IS_MOBILE:
-            ENGINE_CFG['threads'] = max(2, cpu - 2)
-            ENGINE_CFG['ctx_size'] = 2048
-        else:
-            ENGINE_CFG['threads'] = cpu
-            ENGINE_CFG['ctx_size'] = 8192
-        time.sleep(0.5)
-
-# [5] CORE ENGINE (Execution)
 class Engine:
-    def __init__(self):
-        self.root = ROOT
     def run(self):
         driver = SystemUtils.get_driver_path()
-        if not os.path.exists(driver):
-            if not SystemUtils.recover_engine():
-                input(" [!] Fatal Error: Engine missing. Press Enter...")
-                return
-        mdir = os.path.join(self.root, 'models')
-        if not os.path.exists(mdir): os.makedirs(mdir)
+        if not os.path.exists(driver): 
+            if not SystemUtils.recover_engine(): return
+        
+        mdir = os.path.join(ROOT, 'models')
+        os.makedirs(mdir, exist_ok=True)
         models = [f for f in os.listdir(mdir) if f.endswith('.gguf')]
+        
         if not models:
-            print("\n [!] No .gguf models found in /models.")
+            print(f" [!] Error: No models found. Please place a .gguf file in: {mdir}")
             input(" Press Enter to return...")
             return
-        model_path = os.path.join(mdir, models[0])
-        cmd = [
-            driver, "-m", model_path,
-            "-t", str(ENGINE_CFG.get('threads', 4)),
-            "-ngl", str(ENGINE_CFG.get('gpu_layers', 0)),
-            "-c", str(ENGINE_CFG.get('ctx_size', 2048)),
-            "-cnv", "--log-disable",
-            "-p", "System: You are BASIC AI.\nUser: Ready.\nAI: Standing by.\nUser: "
-        ]
-        print(f"\n [🚀] IGNITION: {models[0]}")
-        print(" [!] Press Ctrl+C to return to Dashboard.\n")
-        subprocess.run(cmd)
+
+        model_path = os.path.abspath(os.path.join(mdir, models[0]))
+        print(f" [🚀] IGNITION: {models[0]}")
+        
+        cmd = [driver, "-m", model_path, "-p", "User: Hello\nAI:", "-cnv", "--log-disable"]
+        try: subprocess.run(cmd)
+        except KeyboardInterrupt: pass
 
 if __name__ == "__main__":
-    try: Tuner()
-    except KeyboardInterrupt: sys.exit(0)
-
-# Copyright 2026 R2
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-# http://www.apache.org/licenses/LICENSE-2.0
+    while True:
+        os.system('cls' if os.name=='nt' else 'clear')
+        print(" ==========================================")
+        print(" 🏭 BASIC v3.1 // STANDALONE RUNNER")
+        print(" ==========================================")
+        print(" [S] START ENGINE")
+        print(" [Q] QUIT")
+        
+        cmd = input("\n Command > ").lower().strip()
+        if cmd == 'q': break
+        elif cmd == 's': Engine().run()
