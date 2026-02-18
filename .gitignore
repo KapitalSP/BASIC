@@ -1,11 +1,16 @@
-# Ignore Engine Files
-models/*.gguf
-models/*.bin
+# Ignore Drivers (Binaries should not be in Git)
+drivers/llama-cli
+drivers/llama-cli.exe
+drivers/*.dll
+drivers/*.so
 
-# Ignore Logs
-logs/*
-!logs/.gitkeep
+# Ignore Engine Temp Files (Critical for BASIC)
+.temp_p_*
 
-# Ignore System
-__pycache__/
-*.pyc
+# Ignore OS Metadata
+.DS_Store
+Thumbs.db
+
+# Ignore IDE Settings
+.vscode/
+.idea/
