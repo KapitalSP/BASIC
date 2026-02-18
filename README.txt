@@ -1,82 +1,63 @@
-## 📜 License
+# ⚙️ BASIC: The Industrial Core Engine
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/Python-3.8+-yellow.svg)](https://www.python.org/)
+[![Dependencies](https://img.shields.io/badge/Dependencies-ZERO-success.svg)]()
 
-> **"Free to use, Free to modify. Just keep the credit."**
+> **"Stop fighting with frameworks. Just start the engine."**
 
-BASIC: The Tera-Scale Sovereign
-"Stop Renting Intelligence. Own It."
+**BASIC** is an industrial-grade, ultra-lightweight inference engine for local LLMs (GGUF). It is designed to act as the flawless internal combustion engine for your AI applications. 
 
-BASIC is the industrial-grade, zero-latency spinal cord for 1,000B+ parameter AI.
-We stripped away the safety rails, the bloat, and the cloud dependencies to give you Absolute Knowledge Sovereignty.
+No bloated frameworks. No hidden background services. **Just one Python file and zero external dependencies.**
 
-The Specs (No Compromise)
-BASIC is not a chatbot wrapper. It is a Raw, Unbuffered Pipe between your silicon and the neural weights.
+## 🛡️ Core Philosophy
 
-Component	Specification
-Capacity	1,000B+ Ready (Distributed / Multi-GPU / NUMA-Aware)
-Latency	Zero-Latency (Direct Pipe I/O. No Python Buffering.)
-Architecture	Trust Grid™ (Decoupled Architect & Controller)
-Factory ModeSelf-Replication (Manufactures portable executables.)
+Modern AI tooling is filled with heavy abstractions and fragile dependencies (`pip install`-heavy). BASIC takes a different approach:
+* **Zero Dependency:** Built purely on the Python Standard Library. No `requests`, no `langchain`, no `torch`.
+* **Stateless by Design:** BASIC does not remember conversations. It takes a prompt, yields tokens, and cleans up. Memory leaks are impossible.
+* **Auto-Tuning:** Automatically detects your OS, CPU cores, and system architecture to calculate the optimal thread count and execution parameters.
+* **Hackable:** It is a single file (`basic.py`). You are encouraged to open it, read it, and modify it for your exact needs.
 
-The Trust Grid (Architecture)
-BASIC enforces a strict industrial directory structure to ensure scalability.
+## 🚀 Quick Start (Standalone Mode)
 
-BASIC/
-├── setup.py            # [The Architect] Provisions the grid & fetches the engine.
-├── basic.py            # [The Controller] Hyper-Tuner & Factory Dashboard.
-├── config.json         # [The Registry] Persistent hardware settings.
-│
-├── core/               # [The Brain] Inference logic & Memory sharding.
-├── drivers/            # [The Muscle] Auto-managed binaries. Don't touch.
-├── models/             # [The Soul] Drop your heavy .gguf monoliths here.
-└── dist/               # [The Output] Where new agents are born.
+You can run BASIC right out of the box to test your models.
 
-Ignition Sequence
-1. Construct (The Architect)
-Build the infrastructure and summon the core engine.
+**1. Prepare the Chassis**
+Ensure your directory looks like this:
 
-python setup.py
+    BASIC/
+    ├── drivers/           # Drop your binary here (e.g., llama-cli.exe or llama-cli)
+    ├── models/            # Drop your .gguf model here
+    └── basic.py           # The Engine
 
-Result: The Grid is constructed, llama-cli is downloaded, and scaffolding is deployed.
-
-2. Mount (The Soul)
-Place your .gguf model in the /models directory.
-(Warning: For 100B+ models, ensure your VRAM is ready for the weight.)
-
-3. Ignite (The Controller)
-Sever the connection to the cloud. Start the engine.
-
+**2. Ignite**
+```bash
 python basic.py
 
-The Hyper-Tuner Dashboard
-When you run basic.py, you enter the Industrial Control Center.
+BASIC will automatically find the first .gguf file in the models folder, detect your hardware, and start the inference stream.
 
-┌──────────────────────────────────────────────────┐
-│ 🎛️  BASIC v2.2 // FACTORY EDITION                │
-├──────────────────────────────────────────────────┤
-│ [1] CPU Threads   : 8 (Performance Mode)         │
-│ [2] GPU Layers    : 99 (Max Offload)             │
-│ [3] Context Size  : 8192 (Large Context)         │
-├──────────────────────────────────────────────────┤
-│ [A] Auto-Optimize (Hardware Scan)                │
-│ [B] BUILD STANDALONE (Factory Mode)              │
-│ [S] START ENGINE (Ignition)                      │
-└──────────────────────────────────────────────────┘
+🧩 How to Use as a Library (Developer Mode)
+BASIC is designed to be imported into your own projects (like building your own UI, API server, or automated scripts).
 
-[A] Auto-Optimize: Scans your hardware (Server/PC/Mobile) and applies the optimal thermodynamics.
+from basic import BasicEngine
 
-[B] Factory Mode: Triggers the Self-Replication Protocol. It manufactures a portable, single-file version of this chassis into /dist.
+# 1. Initialize the engine (Auto-detects hardware and models)
+engine = BasicEngine()
 
-[S] Ignition: Saves the configuration and ignites the neural engine.
+# 2. Prepare your prompt
+prompt = "System: You are a helpful assistant.\nUser: Explain quantum computing in one sentence.\nAssistant:"
 
-Liability & Ethics
-We provide the engine. You steer the car.
-
-Zero Liability: The architect is not responsible for what you build, destroy, or replicate with this tool.
-
-The Code: Do not cross the line. With great power comes the absolute responsibility to wield it wisely.
-
-BASIC v2.2 // Architected by KapitalSP
+# 3. Ignite and stream the output
+for token in engine.generate(prompt):
+    print(token, end="", flush=True)
 
 
+🏗️ Architecture (The KapitalSP Ecosystem)
+BASIC is the foundational layer. If you are looking for a ready-to-use application with a UI and memory management, check out our derivative projects:
+
+VOID: The Universal AI Chassis (Personal UI wrapping the BASIC engine).
+
+HIVE: The Swarm Node (Networked distributed inference using BASIC).
+
+⚖️ License
+Distributed under the Apache License 2.0. See LICENSE for more information.
