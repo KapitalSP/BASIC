@@ -1,127 +1,204 @@
-# Copyright 2026 KapitalSP
+# Copyright (c) 2026 KapitalSP
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
-# http://www.apache.org/licenses/LICENSE-2.0
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-import os, sys, platform, json, subprocess, time, urllib.request, zipfile, shutil, stat
+"""
+BASIC (The Industrial Core Engine - v3.6.1)
+Zero-Tolerance Architecture: Thread-Safe, Type-Safe, OS-Limit Bypassed.
+Optimized for high-concurrency offline AI inference.
+"""
 
-# ==============================================================================
-# 🛡️ KAPITAL SENTINEL [UNIVERSAL CORE MANAGER]
-# ==============================================================================
-try: 
-    import psutil
-    HAS_DEPS = True
-except ImportError: 
-    HAS_DEPS = False
+import os
+import sys
+import platform
+import subprocess
+import atexit
+import stat
+import uuid
+import threading
 
-class KapitalSentinel:
-    def __init__(self, role="worker"):
-        self.os = platform.system()
-        self.ignite(role)
-
-    def ignite(self, role):
-        if not HAS_DEPS: return
-        try:
-            p = psutil.Process(os.getpid())
-            # 1. Priority Boost
-            if self.os == "Windows": p.nice(psutil.HIGH_PRIORITY_CLASS)
-            else: 
-                try: p.nice(-10)
-                except: pass
-            
-            # 2. Smart Core Affinity (OS Breathing Room)
-            cores = psutil.cpu_count(logical=True)
-            if role == "worker" and cores:
-                reserve = 1 if cores > 2 else 0
-                if cores > 4: reserve = 2
-                try: p.cpu_affinity(list(range(cores - reserve)))
-                except: pass
-            print(f" [🛡️] SENTINEL ACTIVE: {role.upper()} Mode")
-        except: pass
-
-# Start Sentinel immediately
-sentinel = KapitalSentinel("worker")
-
-# ==============================================================================
-# 🏭 BASIC CHASSIS v3.1 [GLOBAL]
-# ==============================================================================
-ROOT = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(ROOT, "config.json")
-
-class SystemUtils:
-    @staticmethod
-    def get_binary_name():
-        return "llama-cli.exe" if platform.system() == "Windows" else "llama-cli"
-    
-    @staticmethod
-    def get_driver_path():
-        return os.path.join(ROOT, 'drivers', SystemUtils.get_binary_name())
-    
-    @staticmethod
-    def recover_engine():
-        print("\n [SYSTEM] Engine missing. Initiating Auto-Recovery...")
-        sys_os = platform.system().lower()
-        URL_BASE = "https://github.com/ggerganov/llama.cpp/releases/download/b4604/"
-        target = URL_BASE + ("llama-b4604-bin-win-avx-x64.zip" if 'win' in sys_os else "llama-b4604-bin-linux-x64.zip")
-        if 'darwin' in sys_os: target = URL_BASE + "llama-b4604-bin-macos-arm64.zip"
-
-        d_dir = os.path.join(ROOT, 'drivers')
-        os.makedirs(d_dir, exist_ok=True)
-        zip_path = os.path.join(d_dir, "temp_engine.zip")
+class BasicConfig:
+    """Hardware Auto-Detection and Configuration"""
+    def __init__(self):
+        self.os_type = platform.system().lower()
+        self.cpu_cores = os.cpu_count() or 4
+        # Optimization: Use 80% of available cores, capped at 16 threads
+        self.threads = min(max(1, int(self.cpu_cores * 0.8)), 16) 
+        self.context_size = "4096"
+        self.gpu_layers = "99"
         
+        if 'windows' in self.os_type:
+            self.binary_name = "llama-cli.exe"
+        else:
+            self.binary_name = "llama-cli"
+
+def get_base_path():
+    """Detects correct execution path for both script and compiled binary"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+class BasicEngine:
+    """Pure Inference Engine (Stateless, Thread-Safe)"""
+    def __init__(self, model_path=None):
+        self.config = BasicConfig()
+        self.base_dir = get_base_path()
+        self.driver_path = os.path.join(self.base_dir, "drivers", self.config.binary_name)
+        self.model_path = model_path if model_path else self._find_model()
+        
+        # Thread safety for concurrent process management
+        self.process_lock = threading.Lock()
+        self.active_processes = []
+        
+        atexit.register(self.stop_all)
+        self._ensure_executable()
+        
+        if not self._health_check():
+            print(f"⚠️  [Engine Warning] Health check failed. Path: {self.driver_path}")
+
+    def _ensure_executable(self):
+        """Ensures the driver has execution permissions on Unix-like systems"""
+        if os.path.exists(self.driver_path) and 'windows' not in self.config.os_type:
+            try:
+                st = os.stat(self.driver_path)
+                if not (st.st_mode & stat.S_IEXEC):
+                    os.chmod(self.driver_path, st.st_mode | stat.S_IEXEC)
+            except Exception as e:
+                print(f"❌ [Permission Error] Failed to set executable bit: {e}")
+
+    def _find_model(self):
+        """Locates the most recently modified .gguf model in the models directory"""
+        models_dir = os.path.join(self.base_dir, "models")
+        if not os.path.exists(models_dir): return None
         try:
-            import ssl
-            ssl._create_default_https_context = ssl._create_unverified_context
-            print(f" [i] Fetching from: {target}")
-            urllib.request.urlretrieve(target, zip_path)
-            with zipfile.ZipFile(zip_path, 'r') as z:
-                for n in z.namelist():
-                    if 'llama-cli' in n and not n.endswith('/'):
-                        with z.open(n) as s, open(SystemUtils.get_driver_path(), "wb") as t:
-                            shutil.copyfileobj(s, t)
-            
-            if 'win' not in sys_os:
-                st = os.stat(SystemUtils.get_driver_path())
-                os.chmod(SystemUtils.get_driver_path(), st.st_mode | stat.S_IEXEC)
-            print(" [OK] Engine binary restored.")
-            return True
-        except Exception as e:
-            print(f" [ERR] Recovery Failed: {e}")
+            files = [os.path.join(models_dir, f) for f in os.listdir(models_dir) if f.endswith(".gguf")]
+            if not files: return None
+            return max(files, key=os.path.getmtime)
+        except:
+            return None
+
+    def _get_startup_info(self):
+        """Hides terminal window on Windows platforms"""
+        if self.config.os_type == 'windows':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            return startupinfo
+        return None
+
+    def _health_check(self):
+        """Verifies driver integrity and model availability"""
+        if not os.path.exists(self.driver_path) or not self.model_path:
             return False
-        finally:
-            if os.path.exists(zip_path): os.remove(zip_path)
+        try:
+            subprocess.run(
+                [self.driver_path, "--version"], 
+                stdout=subprocess.DEVNULL, 
+                stderr=subprocess.DEVNULL,
+                check=True,
+                timeout=3.0, 
+                startupinfo=self._get_startup_info()
+            )
+            return True
+        except:
+            return False
 
-class Engine:
-    def run(self):
-        driver = SystemUtils.get_driver_path()
-        if not os.path.exists(driver): 
-            if not SystemUtils.recover_engine(): return
-        
-        mdir = os.path.join(ROOT, 'models')
-        os.makedirs(mdir, exist_ok=True)
-        models = [f for f in os.listdir(mdir) if f.endswith('.gguf')]
-        
-        if not models:
-            print(f" [!] Error: No models found. Please place a .gguf file in: {mdir}")
-            input(" Press Enter to return...")
+    def generate(self, full_prompt):
+        """Yields text chunks from the inference driver. 100% Re-entrant."""
+        if not os.path.exists(self.driver_path) or not self.model_path:
+            yield "❌ [Critical] Missing Driver or Model."
+            return
+            
+        try:
+            full_prompt = str(full_prompt)
+        except:
+            yield "❌ [Type Error] Invalid prompt format."
             return
 
-        model_path = os.path.abspath(os.path.join(mdir, models[0]))
-        print(f" [🚀] IGNITION: {models[0]}")
-        
-        cmd = [driver, "-m", model_path, "-p", "User: Hello\nAI:", "-cnv", "--log-disable"]
-        try: subprocess.run(cmd)
-        except KeyboardInterrupt: pass
+        # Unique ID prevents file collisions during concurrent requests
+        unique_id = uuid.uuid4().hex[:8]
+        local_temp_file = os.path.join(self.base_dir, f".temp_p_{unique_id}.txt")
+        local_process = None
 
-if __name__ == "__main__":
-    while True:
-        os.system('cls' if os.name=='nt' else 'clear')
-        print(" ==========================================")
-        print(" 🏭 BASIC v3.1 // STANDALONE RUNNER")
-        print(" ==========================================")
-        print(" [S] START ENGINE")
-        print(" [Q] QUIT")
-        
-        cmd = input("\n Command > ").lower().strip()
-        if cmd == 'q': break
-        elif cmd == 's': Engine().run()
+        try:
+            with open(local_temp_file, "w", encoding="utf-8", errors='ignore') as f:
+                f.write(full_prompt)
+
+            command = [
+                self.driver_path,
+                "-m", self.model_path,
+                "-t", str(self.config.threads),
+                "-c", self.config.context_size,
+                "-ngl", self.config.gpu_layers,
+                "-f", local_temp_file, 
+                "--log-disable",
+                "--no-display-prompt"
+            ]
+
+            local_process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                startupinfo=self._get_startup_info()
+            )
+            
+            with self.process_lock:
+                self.active_processes.append(local_process)
+
+            while True:
+                char = local_process.stdout.read(1)
+                # Check for process completion or stream termination
+                if not char and local_process.poll() is not None:
+                    break
+                if char:
+                    yield char
+
+        except Exception as e:
+            yield f"\n❌ [Runtime Error] {str(e)}"
+        finally:
+            # Resource cleanup: remove process from list and delete temp file
+            if local_process:
+                with self.process_lock:
+                    if local_process in self.active_processes:
+                        self.active_processes.remove(local_process)
+                try:
+                    local_process.terminate()
+                    local_process.wait(timeout=1)
+                except:
+                    try: local_process.kill()
+                    except: pass
+            
+            if os.path.exists(local_temp_file):
+                try: os.remove(local_temp_file)
+                except: pass
+
+    def stop_all(self):
+        """Cleanup on exit: Terminates all orphaned processes and removes temp files"""
+        with self.process_lock:
+            for p in list(self.active_processes):
+                try:
+                    p.terminate()
+                    p.wait(timeout=1)
+                except:
+                    try: p.kill()
+                    except: pass
+            self.active_processes.clear()
+            
+        try:
+            for f in os.listdir(self.base_dir):
+                if f.startswith(".temp_p_"):
+                    os.remove(os.path.join(self.base_dir, f))
+        except:
+            pass
