@@ -140,6 +140,7 @@ class BasicEngine:
                 "-c", self.config.context_size,
                 "-ngl", self.config.gpu_layers,
                 "-f", local_temp_file, 
+                "-n", "1024",           # <--- [추가] 런어웨이 폭주 방지 리미터
                 "--log-disable",
                 "--no-display-prompt"
             ]
